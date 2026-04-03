@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+
+{% block title %}ForgeryShield - AI Image Forgery Detection{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <i class="fas fa-shield-alt"></i> AI-Powered Image Forgery Detection
+        </h1>
+        <p class="hero-subtitle">Upload any image to instantly analyze if it has been tampered with or is authentic using advanced deep learning</p>
+    </div>
+</div>
+
+<div class="container">
+    {% if stats and stats.total_analyses > 0 %}
+    <div class="quick-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
+        <div class="stat-mini" style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius); text-align: center; border: 1px solid var(--border);">
+            <div style="font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{{ stats.total_analyses }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Total Analyzed</div>
+        </div>
+        <div class="stat-mini" style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius); text-align: center; border: 1px solid var(--border);">
+            <div style="font-size: 2rem; font-weight: 700; color: var(--danger);">{{ stats.total_forged }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Forged</div>
+        </div>
+        <div class="stat-mini" style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius); text-align: center; border: 1px solid var(--border);">
+            <div style="font-size: 2rem; font-weight: 700; color: var(--success);">{{ stats.total_authentic }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Authentic</div>
+        </div>
+        <div class="stat-mini" style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius); text-align: center; border: 1px solid var(--border);">
+            <div style="font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, var(--secondary), var(--warning)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{{ "%.1f"|format(stats.avg_confidence) }}%</div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Avg Confidence</div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if not models_ready %}
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+            <strong><i class="fas fa-warning"></i> Models Not Ready!</strong>
+            <p>Please train the CNN and SVM models first.</p>
+            <button id="showInstructions" class="btn btn-secondary">
+                <i class="fas fa-question-circle"></i> Show Instructions
+            </button>
+            <div id="trainingInstructions" class="instructions-box" style="display: none;">
+                <h4><i class="fas fa-list-ol"></i> Training Instructions:</h4>
+                <ol>
+                    <li>Extract patches: <code>python src/extract_patches.py</code></li>
+                    <li>Train CNN: <code>python src/train_net.py</code></li>
+                    <li>Extract features: <code>python src/feature_extraction.py</code></li>
+                    <li>Train SVM: <code>python src/svm_classification.py</code></li>
+                    <li>Copy models to <code>web_app/models/</code></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="upload-section">
+        <div class="upload-card">
+            <div class="upload-header">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h2>Single Image Analysis</h2>
+                <p>Upload an image to detect forgery</p>
+            </div>
+            
+            <div class="upload-area" id="uploadArea">
+                <input type="file" id="fileInput" name="file" accept="image/*" hidden>
+                <div class="upload-placeholder" id="uploadPlaceholder">
+                    <i class="fas fa-image"></i>
+                    <p>Drag & drop an image here</p>
+                    <span>or click to browse</span>
+                    <small class="upload-hint"><i class="fas fa-check"></i> Max size: 16MB | JPG, PNG, WEBP</small>
+                </div>
+                <div class="preview-container" id="previewContainer" style="display: none;">
+                    <img id="previewImage" src="" alt="Preview">
+                    <button type="button" class="remove-btn" id="removeBtn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="analyzeBtn" disabled>
+                <i class="fas fa-search"></i>
+                Analyze Image
+            </button>
+        </div>
+
+        <div class="results-card" id="resultsCard" style="display: none;">
+            <div class="results-header">
+                <h2><i class="fas fa-chart-pie"></i> Analysis Results</h2>
+            </div>
+            <div class="results-content">
+                <div class="result-preview">
+                    <img id="resultImage" src="" alt="Analyzed Image">
+                </div>
+                <div class="result-details">
+                    <div class="result-item">
+                        <span class="result-label"><i class="fas fa-tag"></i> Status</span>
+                        <span class="result-value" id="resultStatus"></span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label"><i class="fas fa-percentage"></i> Confidence</span>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="confidenceFill"></div>
+                        </div>
+                        <span class="confidence-value" id="confidenceValue"></span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label"><i class="fas fa-th"></i> Patches Analyzed</span>
+                        <span class="result-value" id="patchesAnalyzed"></span>
+                    </div>
+                    <div class="result-badge" id="resultBadge"></div>
+                </div>
+            </div>
+            <div class="results-actions">
+                <button type="button" class="btn btn-secondary" id="analyzeAnotherBtn">
+                    <i class="fas fa-plus"></i>
+                    Analyze Another Image
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="batch-section">
+        <div class="batch-card">
+            <div class="batch-header">
+                <i class="fas fa-layer-group"></i>
+                <h2>Batch Analysis</h2>
+                <p>Analyze multiple images at once</p>
+            </div>
+            
+            <div class="batch-upload-area" id="batchUploadArea">
+                <input type="file" id="batchFileInput" name="files" accept="image/*" multiple hidden>
+                <div class="batch-placeholder" id="batchPlaceholder">
+                    <i class="fas fa-images"></i>
+                    <p>Select multiple images for batch analysis</p>
+                    <span class="upload-hint"><i class="fas fa-info-circle"></i> You can select up to 10 images</span>
+                </div>
+                <div class="batch-preview" id="batchPreview" style="display: none;"></div>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="batchAnalyzeBtn" disabled>
+                <i class="fas fa-play"></i>
+                Analyze All Images
+            </button>
+
+            <div class="batch-results" id="batchResults" style="display: none;">
+                <h3><i class="fas fa-list-check"></i> Batch Results</h3>
+                <div class="batch-results-list" id="batchResultsList"></div>
+                <div class="batch-summary" id="batchSummary"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-section">
+        <h2><i class="fas fa-magic"></i> How It Works</h2>
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-upload"></i>
+                </div>
+                <h3>1. Upload</h3>
+                <p>Upload any image you want to check for potential manipulation or forgery</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <h3>2. AI Analysis</h3>
+                <p>Our CNN extracts features and SVM classifier determines image authenticity</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3>3. Results</h3>
+                <p>Get instant feedback with confidence scores on image authenticity</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay" style="display: none;">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Analyzing image...</p>
+        <span class="loading-text"><i class="fas fa-cog fa-spin"></i> Processing patches through CNN</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewImage = document.getElementById('previewImage');
+    const removeBtn = document.getElementById('removeBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const resultsCard = document.getElementById('resultsCard');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('drag-over');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('drag-over');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFileSelect(e.target.files[0]);
+        }
+    });
+
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetUpload();
+    });
+
+    analyzeBtn.addEventListener('click', analyzeImage);
+
+    document.getElementById('analyzeAnotherBtn').addEventListener('click', () => {
+        resultsCard.style.display = 'none';
+        resetUpload();
+    });
+
+    document.getElementById('showInstructions')?.addEventListener('click', () => {
+        const instructions = document.getElementById('trainingInstructions');
+        instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function handleFileSelect(file) {
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file.');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImage.src = e.target.result;
+            uploadPlaceholder.style.display = 'none';
+            previewContainer.style.display = 'block';
+            analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Analyze Image';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function resetUpload() {
+        fileInput.value = '';
+        previewImage.src = '';
+        uploadPlaceholder.style.display = 'flex';
+        previewContainer.style.display = 'none';
+        analyzeBtn.disabled = true;
+    }
+
+    async function analyzeImage() {
+        if (fileInput.files.length === 0) return;
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        loadingOverlay.style.display = 'flex';
+        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+        
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                displayResults(data);
+            } else {
+                alert('Error: ' + (data.error || 'An error occurred'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            loadingOverlay.style.display = 'none';
+            analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Analyze Image';
+        }
+    }
+
+    function displayResults(data) {
+        document.getElementById('resultImage').src = previewImage.src;
+        
+        const statusEl = document.getElementById('resultStatus');
+        statusEl.textContent = data.prediction;
+        statusEl.className = 'result-value ' + (data.prediction === 'Forged' ? 'forged' : 'authentic');
+        
+        document.getElementById('confidenceValue').textContent = data.confidence + '%';
+        document.getElementById('confidenceFill').style.width = data.confidence + '%';
+        document.getElementById('patchesAnalyzed').textContent = data.num_patches;
+        
+        const badge = document.getElementById('resultBadge');
+        if (data.prediction === 'Forged') {
+            badge.className = 'result-badge forged';
+            badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Potential Forgery Detected';
+        } else {
+            badge.className = 'result-badge authentic';
+            badge.innerHTML = '<i class="fas fa-check-circle"></i> Image Appears Authentic';
+        }
+        
+        resultsCard.style.display = 'block';
+        resultsCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Batch upload handling
+    const batchUploadArea = document.getElementById('batchUploadArea');
+    const batchFileInput = document.getElementById('batchFileInput');
+    const batchPlaceholder = document.getElementById('batchPlaceholder');
+    const batchPreview = document.getElementById('batchPreview');
+    const batchAnalyzeBtn = document.getElementById('batchAnalyzeBtn');
+    const batchResults = document.getElementById('batchResults');
+    const batchResultsList = document.getElementById('batchResultsList');
+    const batchSummary = document.getElementById('batchSummary');
+    
+    let selectedFiles = [];
+    
+    if (batchUploadArea) {
+        batchUploadArea.addEventListener('click', () => batchFileInput.click());
+        
+        batchUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            batchUploadArea.classList.add('drag-over');
+        });
+        
+        batchUploadArea.addEventListener('dragleave', () => {
+            batchUploadArea.classList.remove('drag-over');
+        });
+        
+        batchUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            batchUploadArea.classList.remove('drag-over');
+            handleBatchFiles(e.dataTransfer.files);
+        });
+        
+        batchFileInput.addEventListener('change', (e) => {
+            handleBatchFiles(e.target.files);
+        });
+        
+        batchAnalyzeBtn.addEventListener('click', analyzeBatchImages);
+    }
+    
+    function handleBatchFiles(files) {
+        selectedFiles = Array.from(files).filter(file => file.type.startsWith('image/')).slice(0, 10);
+        
+        if (selectedFiles.length === 0) {
+            alert('Please select valid image files.');
+            return;
+        }
+        
+        batchPlaceholder.style.display = 'none';
+        batchPreview.style.display = 'flex';
+        batchPreview.innerHTML = '';
+        
+        selectedFiles.forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = file.name;
+                img.title = file.name;
+                batchPreview.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        batchAnalyzeBtn.disabled = false;
+        batchAnalyzeBtn.innerHTML = '<i class="fas fa-play"></i> Analyze All Images';
+    }
+    
+    async function analyzeBatchImages() {
+        if (selectedFiles.length === 0) return;
+        
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) loadingOverlay.style.display = 'flex';
+        batchAnalyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+        
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+            formData.append('files', file);
+        });
+        
+        try {
+            const response = await fetch('/batch-upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.results) {
+                displayBatchResults(data.results);
+            } else {
+                alert('Error: ' + (data.error || 'An error occurred'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
+            batchAnalyzeBtn.innerHTML = '<i class="fas fa-play"></i> Analyze All Images';
+        }
+    }
+    
+    function displayBatchResults(results) {
+        batchResults.style.display = 'block';
+        batchResultsList.innerHTML = '';
+        
+        let forgedCount = 0;
+        let authenticCount = 0;
+        let errorCount = 0;
+        
+        results.forEach(result => {
+            if (result.error) {
+                errorCount++;
+            } else if (result.prediction === 'Forged') {
+                forgedCount++;
+            } else {
+                authenticCount++;
+            }
+            
+            const item = document.createElement('div');
+            item.className = 'batch-result-item';
+            item.innerHTML = `
+                <span class="filename"><i class="fas fa-image"></i> ${result.filename}</span>
+                ${result.error 
+                    ? `<span class="error" style="color: var(--danger);"><i class="fas fa-times-circle"></i> Error</span>`
+                    : `<span class="prediction ${result.prediction.toLowerCase()}"><i class="fas ${result.prediction === 'Forged' ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i> ${result.prediction} (${result.confidence}%)</span>`
+                }
+            `;
+            batchResultsList.appendChild(item);
+        });
+        
+        batchSummary.innerHTML = `
+            <i class="fas fa-chart-pie"></i> <strong>Summary:</strong> 
+            <span style="color: var(--success);"><i class="fas fa-check-circle"></i> ${authenticCount} Authentic</span> | 
+            <span style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> ${forgedCount} Forged</span> | 
+            <span style="color: var(--warning);"><i class="fas fa-times-circle"></i> ${errorCount} Errors</span>
+        `;
+    }
+});
+</script>
+{% endblock %}

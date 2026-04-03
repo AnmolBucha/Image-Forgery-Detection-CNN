@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block title %}History - ForgeryShield{% endblock %}
+
+{% block extra_css %}
+<style>
+    .history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+    
+    .history-header h2 {
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .history-stats {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+    
+    .history-count {
+        background: var(--bg-card);
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+    
+    .history-table-container {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        overflow: hidden;
+    }
+    
+    .history-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .history-table th {
+        background: rgba(99, 102, 241, 0.1);
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+    
+    .history-table td {
+        padding: 1rem;
+        border-top: 1px solid var(--border);
+    }
+    
+    .history-table tr:hover td {
+        background: rgba(99, 102, 241, 0.05);
+    }
+    
+    .filename-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        max-width: 300px;
+    }
+    
+    .filename-cell i {
+        color: var(--primary);
+    }
+    
+    .filename-cell span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .prediction-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.875rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .prediction-badge.forged {
+        background: rgba(239, 68, 68, 0.2);
+        color: var(--danger);
+    }
+    
+    .prediction-badge.authentic {
+        background: rgba(16, 185, 129, 0.2);
+        color: var(--success);
+    }
+    
+    .confidence-value {
+        font-weight: 600;
+        color: var(--accent);
+    }
+    
+    .confidence-bar-mini {
+        width: 60px;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+    }
+    
+    .confidence-bar-mini .fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        border-radius: 3px;
+    }
+    
+    .time-cell {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+    
+    .time-cell .date {
+        display: block;
+    }
+    
+    .time-cell .time {
+        font-size: 0.75rem;
+        opacity: 0.7;
+    }
+    
+    .action-btn {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 50%;
+        transition: all 0.3s;
+    }
+    
+    .action-btn:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: var(--danger);
+    }
+    
+    .action-btn.delete:hover {
+        transform: scale(1.1);
+    }
+    
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+    }
+    
+    .pagination a, .pagination span {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-sm);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+    
+    .pagination a:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    
+    .pagination .active {
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        color: white;
+        border-color: transparent;
+    }
+    
+    .pagination .disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    
+    .empty-history {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+    
+    .empty-history i {
+        font-size: 5rem;
+        color: var(--text-muted);
+        margin-bottom: 1rem;
+    }
+    
+    .empty-history h3 {
+        margin-bottom: 0.5rem;
+        color: var(--text-secondary);
+    }
+    
+    .empty-history p {
+        color: var(--text-muted);
+    }
+    
+    .filters {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .filter-btn {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-sm);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .filter-btn:hover, .filter-btn.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    
+    .clear-history-btn {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+    }
+    
+    .clear-history-btn:hover {
+        background: var(--danger);
+        color: white;
+    }
+    
+    @media (max-width: 768px) {
+        .history-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .history-header {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <i class="fas fa-history"></i> Analysis History
+        </h1>
+        <p class="hero-subtitle">View and manage all your past image analyses</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="history-header">
+        <h2><i class="fas fa-list"></i> All Analyses</h2>
+        <div class="history-stats">
+            <span class="history-count">
+                <i class="fas fa-images"></i> {{ total_items }} total analyses
+            </span>
+            <button class="btn filter-btn clear-history-btn" id="clearAllBtn">
+                <i class="fas fa-trash"></i> Clear All
+            </button>
+        </div>
+    </div>
+    
+    <div class="filters">
+        <button class="filter-btn active" data-filter="all">
+            <i class="fas fa-th"></i> All
+        </button>
+        <button class="filter-btn" data-filter="forged">
+            <i class="fas fa-exclamation-triangle"></i> Forged
+        </button>
+        <button class="filter-btn" data-filter="authentic">
+            <i class="fas fa-check-circle"></i> Authentic
+        </button>
+    </div>
+    
+    <div class="history-table-container">
+        {% if history %}
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th><i class="fas fa-image"></i> Filename</th>
+                    <th><i class="fas fa-tag"></i> Prediction</th>
+                    <th><i class="fas fa-percentage"></i> Confidence</th>
+                    <th><i class="fas fa-th"></i> Patches</th>
+                    <th><i class="fas fa-clock"></i> Date & Time</th>
+                    <th><i class="fas fa-cog"></i> Actions</th>
+                </tr>
+            </thead>
+            <tbody id="historyTableBody">
+                {% for item in history %}
+                <tr data-prediction="{{ item.prediction|lower }}">
+                    <td>
+                        <div class="filename-cell">
+                            <i class="fas fa-image"></i>
+                            <span title="{{ item.filename }}">{{ item.filename }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="prediction-badge {{ item.prediction|lower }}">
+                            <i class="fas {{ 'fa-exclamation-triangle' if item.prediction == 'Forged' else 'fa-check-circle' }}"></i>
+                            {{ item.prediction }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="confidence-bar-mini">
+                            <div class="fill" style="width: {{ item.confidence }}%;"></div>
+                        </div>
+                        <span class="confidence-value">{{ item.confidence }}%</span>
+                    </td>
+                    <td>{{ item.num_patches }}</td>
+                    <td class="time-cell">
+                        <span class="date">{{ item.timestamp[:10] }}</span>
+                        <span class="time">{{ item.timestamp[11:16] }}</span>
+                    </td>
+                    <td>
+                        <button class="action-btn delete" onclick="deleteItem({{ item.id }})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-history">
+            <i class="fas fa-inbox"></i>
+            <h3>No History Yet</h3>
+            <p>Start analyzing images to see them here!</p>
+            <a href="{{ url_for('home') }}" class="btn btn-primary" style="margin-top: 1rem;">
+                <i class="fas fa-upload"></i> Upload Image
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="{{ url_for('history', page=1) }}"><i class="fas fa-angle-double-left"></i></a>
+        <a href="{{ url_for('history', page=page-1) }}"><i class="fas fa-angle-left"></i></a>
+        {% else %}
+        <span class="disabled"><i class="fas fa-angle-double-left"></i></span>
+        <span class="disabled"><i class="fas fa-angle-left"></i></span>
+        {% endif %}
+        
+        {% for p in range(1, total_pages + 1) %}
+            {% if p >= page - 2 and p <= page + 2 %}
+                <a href="{{ url_for('history', page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page < total_pages %}
+        <a href="{{ url_for('history', page=page+1) }}"><i class="fas fa-angle-right"></i></a>
+        <a href="{{ url_for('history', page=total_pages) }}"><i class="fas fa-angle-double-right"></i></a>
+        {% else %}
+        <span class="disabled"><i class="fas fa-angle-right"></i></span>
+        <span class="disabled"><i class="fas fa-angle-double-right"></i></span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterBtns = document.querySelectorAll('.filter-btn[data-filter]');
+    const tableBody = document.getElementById('historyTableBody');
+    
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            const filter = this.dataset.filter;
+            const rows = tableBody.querySelectorAll('tr');
+            
+            rows.forEach(row => {
+                if (filter === 'all') {
+                    row.style.display = '';
+                } else {
+                    row.style.display = row.dataset.prediction === filter ? '' : 'none';
+                }
+            });
+        });
+    });
+    
+    document.getElementById('clearAllBtn').addEventListener('click', function() {
+        if (confirm('Are you sure you want to clear all history? This cannot be undone.')) {
+            fetch('/api/history/clear', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    }
+                });
+        }
+    });
+});
+
+function deleteItem(id) {
+    if (confirm('Are you sure you want to delete this item?')) {
+        fetch(`/api/history/${id}`, { method: 'DELETE' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                }
+            });
+    }
+}
+</script>
+{% endblock %}

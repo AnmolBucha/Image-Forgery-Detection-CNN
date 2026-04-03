@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ForgeryShield{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--glow);
+    }
+    
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+    }
+    
+    .stat-card.total::before { background: linear-gradient(90deg, var(--primary), var(--accent)); }
+    .stat-card.forged::before { background: linear-gradient(90deg, var(--danger), #dc2626); }
+    .stat-card.authentic::before { background: linear-gradient(90deg, var(--success), #059669); }
+    .stat-card.confidence::before { background: linear-gradient(90deg, var(--secondary), var(--warning)); }
+    
+    .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 1.5rem;
+    }
+    
+    .stat-card.total .stat-icon { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+    .stat-card.forged .stat-icon { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+    .stat-card.authentic .stat-icon { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+    .stat-card.confidence .stat-icon { background: rgba(236, 72, 153, 0.2); color: var(--secondary); }
+    
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0.25rem;
+        background: linear-gradient(135deg, #fff, var(--text-secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stat-label {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .stat-change {
+        margin-top: 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .stat-change.positive { color: var(--success); }
+    .stat-change.negative { color: var(--danger); }
+    
+    .chart-section {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        padding: 2rem;
+        border: 1px solid var(--border);
+        margin-bottom: 2rem;
+    }
+    
+    .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .chart-header h3 {
+        font-size: 1.25rem;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .chart-container {
+        height: 300px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-around;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: var(--radius);
+    }
+    
+    .bar {
+        width: 50px;
+        background: linear-gradient(180deg, var(--primary), var(--accent));
+        border-radius: var(--radius) var(--radius) 0 0;
+        position: relative;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    
+    .bar:hover {
+        transform: scaleY(1.05);
+        box-shadow: var(--glow);
+    }
+    
+    .bar-label {
+        position: absolute;
+        bottom: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    
+    .bar-value {
+        position: absolute;
+        top: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    
+    .pie-chart {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: conic-gradient(
+            var(--success) 0deg,
+            var(--success) var(--forged-angle, 0deg),
+            var(--danger) var(--forged-angle, 0deg),
+            var(--danger) 360deg
+        );
+        position: relative;
+        margin: 0 auto;
+    }
+    
+    .pie-chart::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100px;
+        height: 100px;
+        background: var(--bg-dark);
+        border-radius: 50%;
+    }
+    
+    .pie-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        z-index: 1;
+    }
+    
+    .pie-center .value {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    
+    .pie-center .label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    
+    .legend {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        margin-top: 1.5rem;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+    }
+    
+    .recent-section {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        padding: 2rem;
+        border: 1px solid var(--border);
+    }
+    
+    .recent-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .recent-header h3 {
+        font-size: 1.25rem;
+    }
+    
+    .recent-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .recent-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: rgba(99, 102, 241, 0.05);
+        border-radius: var(--radius-sm);
+        border-left: 4px solid var(--primary);
+        transition: all 0.3s;
+    }
+    
+    .recent-item:hover {
+        background: rgba(99, 102, 241, 0.1);
+        transform: translateX(5px);
+    }
+    
+    .recent-item .filename {
+        font-weight: 500;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .recent-item .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .recent-item .badge.forged {
+        background: rgba(239, 68, 68, 0.2);
+        color: var(--danger);
+    }
+    
+    .recent-item .badge.authentic {
+        background: rgba(16, 185, 129, 0.2);
+        color: var(--success);
+    }
+    
+    .recent-item .confidence {
+        font-weight: 600;
+        color: var(--accent);
+    }
+    
+    .recent-item .time {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .chart-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 992px) {
+        .chart-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <i class="fas fa-chart-bar"></i> Analytics Dashboard
+        </h1>
+        <p class="hero-subtitle">Track your image analysis statistics and insights</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <div class="stat-icon">
+                <i class="fas fa-images"></i>
+            </div>
+            <div class="stat-value" id="totalImages">{{ stats.total_analyses or 0 }}</div>
+            <div class="stat-label">Total Images Analyzed</div>
+        </div>
+        
+        <div class="stat-card forged">
+            <div class="stat-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-value" id="totalForged">{{ stats.total_forged or 0 }}</div>
+            <div class="stat-label">Forged Detected</div>
+        </div>
+        
+        <div class="stat-card authentic">
+            <div class="stat-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value" id="totalAuthentic">{{ stats.total_authentic or 0 }}</div>
+            <div class="stat-label">Authentic Images</div>
+        </div>
+        
+        <div class="stat-card confidence">
+            <div class="stat-icon">
+                <i class="fas fa-percentage"></i>
+            </div>
+            <div class="stat-value" id="avgConfidence">{{ "%.1f"|format(stats.avg_confidence or 0) }}%</div>
+            <div class="stat-label">Avg Confidence</div>
+        </div>
+    </div>
+    
+    <div class="chart-grid">
+        <div class="chart-section">
+            <div class="chart-header">
+                <h3><i class="fas fa-chart-line"></i> Daily Analysis Trend</h3>
+            </div>
+            <div class="chart-container" id="barChart">
+                {% if daily_stats %}
+                    {% for day in daily_stats %}
+                    <div class="bar" style="height: {{ (day.total_images / (daily_stats[0].total_images if daily_stats else 1)) * 200 }}px;">
+                        <span class="bar-value">{{ day.total_images }}</span>
+                        <span class="bar-label">{{ day.date[5:] }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p style="color: var(--text-secondary); text-align: center; width: 100%;">No data available yet. Start analyzing images!</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="chart-section">
+            <div class="chart-header">
+                <h3><i class="fas fa-chart-pie"></i> Detection Ratio</h3>
+            </div>
+            <div class="pie-chart" id="pieChart" 
+                 style="--forged-angle: {{ (stats.total_forged / (stats.total_analyses or 1) * 360)|int }}deg">
+                <div class="pie-center">
+                    <div class="value">{{ stats.total_analyses or 0 }}</div>
+                    <div class="label">Total</div>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--success);"></div>
+                    <span>Authentic: {{ stats.total_authentic or 0 }}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--danger);"></div>
+                    <span>Forged: {{ stats.total_forged or 0 }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="recent-section">
+        <div class="recent-header">
+            <h3><i class="fas fa-history"></i> Recent Analyses</h3>
+            <a href="{{ url_for('history') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-right"></i> View All
+            </a>
+        </div>
+        <div class="recent-list" id="recentList">
+            <div class="empty-state" id="emptyState">
+                <i class="fas fa-inbox"></i>
+                <p>No analyses yet. Start by analyzing an image!</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadRecentHistory();
+    
+    function loadRecentHistory() {
+        fetch('/api/history?page=1')
+            .then(response => response.json())
+            .then(data => {
+                const recentList = document.getElementById('recentList');
+                const emptyState = document.getElementById('emptyState');
+                
+                if (data.history && data.history.length > 0) {
+                    emptyState.style.display = 'none';
+                    
+                    recentList.innerHTML = data.history.slice(0, 5).map(item => `
+                        <div class="recent-item">
+                            <div>
+                                <div class="filename"><i class="fas fa-image"></i> ${item.filename}</div>
+                                <div class="time">${formatTime(item.timestamp)}</div>
+                            </div>
+                            <div class="badge ${item.prediction.toLowerCase()}">${item.prediction}</div>
+                            <div class="confidence">${item.confidence.toFixed(1)}%</div>
+                        </div>
+                    `).join('');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading history:', error);
+            });
+    }
+    
+    function formatTime(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'Just now';
+        if (diff < 3600000) return Math.floor(diff / 60000) + ' min ago';
+        if (diff < 86400000) return Math.floor(diff / 3600000) + ' hours ago';
+        if (diff < 604800000) return Math.floor(diff / 86400000) + ' days ago';
+        
+        return date.toLocaleDateString();
+    }
+});
+</script>
+{% endblock %}
